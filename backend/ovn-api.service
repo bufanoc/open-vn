@@ -1,0 +1,14 @@
+[Unit]
+Description=Open-VN API Service
+After=network.target postgresql.service
+
+[Service]
+User=ovn
+Group=ovn
+WorkingDirectory=/opt/open-vn/backend
+Environment="PATH=/opt/open-vn/venv/bin"
+ExecStart=/opt/open-vn/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
