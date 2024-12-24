@@ -30,25 +30,29 @@ if ! grep -q "Ubuntu 22.04" /etc/os-release; then
     exit 1
 fi
 
-# Create ovn user if it doesn't exist
-print_status "Creating ovn user..."
-if ! id "ovn" &>/dev/null; then
-    useradd -m -s /bin/bash ovn
-    print_success "Created ovn user"
-else
-    print_success "ovn user already exists"
-fi
+print_status "Starting Open-VN installation..."
 
 # Update system and install dependencies
 print_status "Updating system and installing dependencies..."
-apt update
-apt upgrade -y
-apt install -y python3.11 python3.11-venv python3-pip postgresql postgresql-contrib nginx curl
+apt update && apt upgrade -y
+apt install -y python3.11 \
+    python3.11-venv \
+    python3-pip \
+    postgresql \
+    postgresql-contrib \
+    nginx \
+    curl
 
 # Install Node.js
 print_status "Installing Node.js..."
 curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 apt install -y nodejs
+
+# Create application directory
+print_status "Setting up application directory..."
+APP_DIR="/opt/open-vn"
+mkdir -p $APP_DIR
+cd $APP_DIR
 
 # Set up PostgreSQL
 print_status "Configuring PostgreSQL..."
@@ -56,19 +60,8 @@ sudo -u postgres psql -c "CREATE DATABASE ovn;" || true
 sudo -u postgres psql -c "CREATE USER ovnuser WITH PASSWORD 'ovnpass';" || true
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE ovn TO ovnuser;" || true
 
-# Create application directory and set permissions
-print_status "Setting up application directory..."
-mkdir -p /opt/open-vn
-chown -R ovn:ovn /opt/open-vn
-
-# Copy application files
-print_status "Copying application files..."
-cp -r ./* /opt/open-vn/
-chown -R ovn:ovn /opt/open-vn
-
 # Set up Python virtual environment
 print_status "Setting up Python virtual environment..."
-cd /opt/open-vn
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -76,8 +69,8 @@ deactivate
 
 # Create database configuration
 print_status "Creating database configuration..."
-mkdir -p /opt/open-vn/backend/app/config
-cat > /opt/open-vn/backend/app/config/database.py << EOL
+mkdir -p backend/app/config
+cat > backend/app/config/database.py << EOL
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -97,23 +90,16 @@ def get_db():
         db.close()
 EOL
 
-# Set up frontend
-print_status "Setting up frontend..."
-cd /opt/open-vn/frontend
-npm install
-npm run build
-
 # Configure nginx
 print_status "Configuring nginx..."
-cp /opt/open-vn/frontend/nginx.conf /etc/nginx/sites-available/open-vn
+cp frontend/nginx.conf /etc/nginx/sites-available/open-vn
 ln -sf /etc/nginx/sites-available/open-vn /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl restart nginx
+nginx -t && systemctl restart nginx
 
 # Set up backend service
 print_status "Setting up backend service..."
-cp /opt/open-vn/backend/ovn-api.service /etc/systemd/system/
+cp backend/ovn-api.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable ovn-api
 systemctl start ovn-api
@@ -122,7 +108,7 @@ print_success "Installation completed successfully!"
 print_success "You can access the web interface at: http://$(hostname -I | awk '{print $1}')"
 print_success "API is running at: http://$(hostname -I | awk '{print $1}'):8000"
 
-# Print status of services
+# Print service status
 echo -e "\nService Status:"
 echo "---------------"
 systemctl status nginx --no-pager
