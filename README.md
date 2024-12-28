@@ -46,7 +46,7 @@ sudo apt upgrade -y
 
 2. Clone the repository
 ```bash
-git clone https://github.com/yourusername/open-vn.git
+git clone https://github.com/bufanoc/open-vn.git
 cd open-vn
 ```
 
